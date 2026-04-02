@@ -1,0 +1,10 @@
+{
+  "targets": [
+    {
+      "name": "example-site",
+      "url": "https://example.com",
+      "host": "example.com",
+      "notes": "Default starter target"
+    }
+  ]
+}
