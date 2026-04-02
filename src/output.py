@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from .models import CheckResult, DiagnosisReport
+from .severity import infer_severity
 
 
 
@@ -12,12 +13,14 @@ def render_result(result: CheckResult, as_json: bool = False) -> str:
         'ok': result.ok,
         'summary': result.summary,
         'details': result.details,
+        'severity': infer_severity(result),
     }
     if as_json:
         return json.dumps(payload, indent=2)
 
     status = 'OK' if result.ok else 'FAIL'
-    lines = [f'[{status}] {result.name}', result.summary]
+    severity = infer_severity(result)
+    lines = [f'[{status}] {result.name} ({severity})', result.summary]
     if result.details:
         lines.append('')
         lines.append('Details:')
@@ -34,12 +37,13 @@ def render_diagnosis(report: DiagnosisReport, as_json: bool = False) -> str:
         'failed_checks': report.failed_checks,
         'probable_causes': report.probable_causes,
         'recommended_actions': report.recommended_actions,
+        'overall_severity': report.overall_severity,
     }
     if as_json:
         return json.dumps(payload, indent=2)
 
     status = 'HEALTHY' if report.healthy else 'ATTENTION NEEDED'
-    lines = [f'[{status}] Diagnosis', report.summary]
+    lines = [f'[{status}] Diagnosis', report.summary, f'Overall severity: {report.overall_severity.upper()}']
     if report.failed_checks:
         lines.append('')
         lines.append('Failed checks:')

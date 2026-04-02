@@ -27,3 +27,4 @@ class DiagnosisReport:
     failed_checks: list[str] = field(default_factory=list)
     probable_causes: list[str] = field(default_factory=list)
     recommended_actions: list[str] = field(default_factory=list)
+    overall_severity: str = 'info'

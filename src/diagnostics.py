@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .models import CheckResult, DiagnosisReport
+from .severity import summarize_overall_severity
 
 
 FAILURE_HINTS = {
@@ -48,4 +49,5 @@ def build_diagnosis(results: list[CheckResult]) -> DiagnosisReport:
         failed_checks=[result.name for result in failures],
         probable_causes=probable_causes,
         recommended_actions=list(dict.fromkeys(recommended_actions)),
+        overall_severity=summarize_overall_severity(results),
     )

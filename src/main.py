@@ -8,6 +8,7 @@ from .config_loader import EXAMPLE_CONFIG_PATH, load_targets
 from .diagnostics import build_diagnosis
 from .logs import read_logs
 from .output import render_diagnosis, render_result
+from .report_format import render_report_summary
 from .reporting import build_daily_report
 from .validation import validate_target
 
@@ -105,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
         if exit_code is not None:
             return exit_code
         results = build_daily_report(target)
+        print(render_report_summary(results))
+        print()
         failures = 0
         for result in results:
             print(render_result(result, as_json=args.json))
@@ -118,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
         if exit_code is not None:
             return exit_code
         results = build_daily_report(target)
+        print(render_report_summary(results))
+        print()
         for result in results:
             print(render_result(result, as_json=args.json))
             print()
