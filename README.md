@@ -17,3 +17,9 @@ CLI-first AI website/server caretaker for small businesses and agencies.
 - `docs/` product notes and roadmap
 - `scripts/` helper scripts
 - `tests/` automated tests
+
+## Current commands
+- `python -m src.main about`
+- `python -m src.main check-site https://example.com`
+- `python -m src.main check-ssl example.com`
+- `python -m src.main check-server example.com --port 80`
