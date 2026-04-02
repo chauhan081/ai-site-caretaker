@@ -2,25 +2,57 @@ from __future__ import annotations
 
 import json
 
-from .models import CheckResult
+from .models import CheckResult, DiagnosisReport
 
 
 
 def render_result(result: CheckResult, as_json: bool = False) -> str:
     payload = {
-        "name": result.name,
-        "ok": result.ok,
-        "summary": result.summary,
-        "details": result.details,
+        'name': result.name,
+        'ok': result.ok,
+        'summary': result.summary,
+        'details': result.details,
     }
     if as_json:
         return json.dumps(payload, indent=2)
 
-    status = "OK" if result.ok else "FAIL"
-    lines = [f"[{status}] {result.name}", result.summary]
+    status = 'OK' if result.ok else 'FAIL'
+    lines = [f'[{status}] {result.name}', result.summary]
     if result.details:
-        lines.append("")
-        lines.append("Details:")
+        lines.append('')
+        lines.append('Details:')
         for key, value in result.details.items():
-            lines.append(f"- {key}: {value}")
-    return "\n".join(lines)
+            lines.append(f'- {key}: {value}')
+    return '\n'.join(lines)
+
+
+
+def render_diagnosis(report: DiagnosisReport, as_json: bool = False) -> str:
+    payload = {
+        'healthy': report.healthy,
+        'summary': report.summary,
+        'failed_checks': report.failed_checks,
+        'probable_causes': report.probable_causes,
+        'recommended_actions': report.recommended_actions,
+    }
+    if as_json:
+        return json.dumps(payload, indent=2)
+
+    status = 'HEALTHY' if report.healthy else 'ATTENTION NEEDED'
+    lines = [f'[{status}] Diagnosis', report.summary]
+    if report.failed_checks:
+        lines.append('')
+        lines.append('Failed checks:')
+        for item in report.failed_checks:
+            lines.append(f'- {item}')
+    if report.probable_causes:
+        lines.append('')
+        lines.append('Probable causes:')
+        for item in report.probable_causes:
+            lines.append(f'- {item}')
+    if report.recommended_actions:
+        lines.append('')
+        lines.append('Recommended actions:')
+        for item in report.recommended_actions:
+            lines.append(f'- {item}')
+    return '\n'.join(lines)

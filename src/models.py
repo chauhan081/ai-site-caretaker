@@ -18,3 +18,12 @@ class TargetConfig:
     url: str | None = None
     host: str | None = None
     notes: str | None = None
+
+
+@dataclass
+class DiagnosisReport:
+    healthy: bool
+    summary: str
+    failed_checks: list[str] = field(default_factory=list)
+    probable_causes: list[str] = field(default_factory=list)
+    recommended_actions: list[str] = field(default_factory=list)
