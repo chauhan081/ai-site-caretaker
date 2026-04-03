@@ -7,7 +7,7 @@ from .alerts import VALID_ALERT_SEVERITIES, filter_results
 from .checks import check_server, check_site, check_ssl
 from .config_loader import EXAMPLE_CONFIG_PATH, load_targets
 from .diagnostics import build_diagnosis
-from .exporting import export_text
+from .exporting import export_text, resolve_export_path
 from .logs import read_logs
 from .output import render_diagnosis, render_result, serialize_diagnosis
 from .report_format import render_report_summary, serialize_report_summary
@@ -29,6 +29,20 @@ def _add_alert_filter_args(parser: argparse.ArgumentParser) -> None:
         '--min-severity',
         choices=VALID_ALERT_SEVERITIES,
         help='Only include checks at or above the selected severity threshold',
+    )
+
+
+
+def _add_export_args(parser: argparse.ArgumentParser, noun: str) -> None:
+    parser.add_argument('--output', help=f'Write the rendered {noun} to a .txt or .json file')
+    parser.add_argument(
+        '--output-dir',
+        help=f'Write the rendered {noun} into a directory using an auto-generated filename',
+    )
+    parser.add_argument(
+        '--timestamped',
+        action='store_true',
+        help='Append YYYYMMDD-HHMMSS to exported filenames (useful for scheduled runs)',
     )
 
 
@@ -59,13 +73,13 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser = subparsers.add_parser('daily-report', help='Run checks for a configured target')
     report_parser.add_argument('target_name')
     report_parser.add_argument('--json', action='store_true')
-    report_parser.add_argument('--output', help='Write the rendered report to a .txt or .json file')
+    _add_export_args(report_parser, 'report')
     _add_alert_filter_args(report_parser)
 
     diagnose_parser = subparsers.add_parser('diagnose-target', help='Run checks and produce a diagnosis for a configured target')
     diagnose_parser.add_argument('target_name')
     diagnose_parser.add_argument('--json', action='store_true')
-    diagnose_parser.add_argument('--output', help='Write the rendered diagnosis to a .txt or .json file')
+    _add_export_args(diagnose_parser, 'diagnosis')
     _add_alert_filter_args(diagnose_parser)
 
     subparsers.add_parser('about', help='Show project info')
@@ -90,17 +104,41 @@ def _load_target_or_exit(target_name: str) -> tuple[object | None, int | None]:
 
 
 
-def _emit_output(content: str, output_path: str | None = None) -> None:
+def _emit_output(
+    content: str,
+    *,
+    command_name: str,
+    target_name: str,
+    as_json: bool,
+    output_path: str | None = None,
+    output_dir: str | None = None,
+    timestamped: bool = False,
+    alerts_only: bool = False,
+    min_severity: str | None = None,
+) -> None:
     print(content)
-    if output_path:
-        export_text(content, output_path)
-        print(f'Exported report to {output_path}')
+    destination = resolve_export_path(
+        command_name=command_name,
+        target_name=target_name,
+        as_json=as_json,
+        output_path=output_path,
+        output_dir=output_dir,
+        timestamped=timestamped,
+        alerts_only=alerts_only,
+        min_severity=min_severity,
+    )
+    if destination is not None:
+        export_text(content, destination)
+        print(f'Exported report to {destination}')
 
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if getattr(args, 'output', None) and getattr(args, 'output_dir', None):
+        parser.error('Use either --output or --output-dir, not both')
 
     if args.command == 'about':
         print('AI Site Caretaker')
@@ -146,7 +184,17 @@ def main(argv: list[str] | None = None) -> int:
             for result in filtered_results:
                 blocks.append(render_result(result))
             content = '\n\n'.join(blocks)
-        _emit_output(content, args.output)
+        _emit_output(
+            content,
+            command_name='daily-report',
+            target_name=args.target_name,
+            as_json=args.json,
+            output_path=args.output,
+            output_dir=args.output_dir,
+            timestamped=args.timestamped,
+            alerts_only=args.alerts_only,
+            min_severity=args.min_severity,
+        )
         failures = sum(1 for result in filtered_results if not result.ok)
         return 0 if failures == 0 else 1
 
@@ -171,7 +219,17 @@ def main(argv: list[str] | None = None) -> int:
             blocks.extend(render_result(result) for result in filtered_results)
             blocks.append(render_diagnosis(diagnosis))
             content = '\n\n'.join(blocks)
-        _emit_output(content, args.output)
+        _emit_output(
+            content,
+            command_name='diagnose-target',
+            target_name=args.target_name,
+            as_json=args.json,
+            output_path=args.output,
+            output_dir=args.output_dir,
+            timestamped=args.timestamped,
+            alerts_only=args.alerts_only,
+            min_severity=args.min_severity,
+        )
         return 0 if diagnosis.healthy else 1
 
     parser.error(f'Unknown command: {args.command}')

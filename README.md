@@ -43,6 +43,7 @@ ai-site-caretaker about
 - `python -m src.main daily-report example-site --alerts-only`
 - `python -m src.main daily-report example-site --min-severity high --output reports/example-site-alerts.txt`
 - `python -m src.main daily-report example-site --json --output reports/example-site.json`
+- `python -m src.main daily-report example-site --json --output-dir reports --timestamped`
 - `python -m src.main diagnose-target example-site`
 - `python -m src.main diagnose-target example-site --json`
 - `python -m src.main diagnose-target example-site --alerts-only --min-severity medium`
@@ -109,10 +110,13 @@ Both aggregate commands can write their rendered output to disk, including alert
 ```text
 python -m src.main daily-report example-site --json --output reports/example-site.json
 python -m src.main daily-report example-site --alerts-only --output reports/example-site-alerts.txt
+python -m src.main daily-report example-site --json --output-dir reports --timestamped
 python -m src.main diagnose-target example-site --alerts-only --min-severity medium --output reports/example-site-diagnosis.json
 ```
 
 Supported export formats are `.json` and `.txt`. Parent folders are created automatically.
+Use `--output-dir` to let the CLI generate filenames like `example-site-daily-report-20260403-103045.json` for scheduled runs.
+Use `--timestamped` with `--output` to preserve a chosen base name while still avoiding overwrites.
 
 ### JSON diagnosis
 ```text
