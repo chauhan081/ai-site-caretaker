@@ -7,8 +7,8 @@ from .checks import check_server, check_site, check_ssl
 from .config_loader import EXAMPLE_CONFIG_PATH, load_targets
 from .diagnostics import build_diagnosis
 from .logs import read_logs
-from .output import render_diagnosis, render_result
-from .report_format import render_report_summary
+from .output import render_diagnosis, render_result, serialize_diagnosis
+from .report_format import render_report_summary, serialize_report_summary
 from .reporting import build_daily_report
 from .validation import validate_target
 
@@ -106,14 +106,15 @@ def main(argv: list[str] | None = None) -> int:
         if exit_code is not None:
             return exit_code
         results = build_daily_report(target)
-        print(render_report_summary(results))
-        print()
-        failures = 0
-        for result in results:
-            print(render_result(result, as_json=args.json))
+        if args.json:
+            print(render_report_summary(results, as_json=True))
+        else:
+            print(render_report_summary(results))
             print()
-            if not result.ok:
-                failures += 1
+            for result in results:
+                print(render_result(result))
+                print()
+        failures = sum(1 for result in results if not result.ok)
         return 0 if failures == 0 else 1
 
     if args.command == 'diagnose-target':
@@ -121,13 +122,19 @@ def main(argv: list[str] | None = None) -> int:
         if exit_code is not None:
             return exit_code
         results = build_daily_report(target)
-        print(render_report_summary(results))
-        print()
-        for result in results:
-            print(render_result(result, as_json=args.json))
-            print()
         diagnosis = build_diagnosis(results)
-        print(render_diagnosis(diagnosis, as_json=args.json))
+        if args.json:
+            payload = serialize_report_summary(results)
+            payload['diagnosis'] = serialize_diagnosis(diagnosis)
+            import json
+            print(json.dumps(payload, indent=2))
+        else:
+            print(render_report_summary(results))
+            print()
+            for result in results:
+                print(render_result(result))
+                print()
+            print(render_diagnosis(diagnosis))
         return 0 if diagnosis.healthy else 1
 
     parser.error(f'Unknown command: {args.command}')
