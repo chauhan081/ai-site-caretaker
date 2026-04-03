@@ -7,6 +7,7 @@ from pathlib import Path
 from .alerts import VALID_ALERT_SEVERITIES, filter_results
 from .checks import check_server, check_site, check_ssl
 from .config_loader import EXAMPLE_CONFIG_PATH, load_targets
+from .delivery import DeliveryError, deliver_notification, should_deliver
 from .diagnostics import build_diagnosis
 from .exporting import export_text, resolve_export_path
 from .logs import read_logs
@@ -55,7 +56,12 @@ def _add_notification_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         '--notify-target',
-        help='Use a named notification target from config/targets.json to annotate the payload',
+        help='Use a named notification target from config/targets.json to annotate or deliver the payload',
+    )
+    parser.add_argument(
+        '--deliver',
+        action='store_true',
+        help='Actually deliver the rendered notification to the named target instead of only printing/exporting it',
     )
 
 
@@ -135,8 +141,10 @@ def _emit_output(
     timestamped: bool = False,
     alerts_only: bool = False,
     min_severity: str | None = None,
+    print_content: bool = True,
 ) -> None:
-    print(content)
+    if print_content:
+        print(content)
     destination = resolve_export_path(
         command_name=command_name,
         target_name=target_name,
@@ -152,7 +160,7 @@ def _emit_output(
         print(f'Exported report to {destination}')
 
 
-def _render_report_content(args: argparse.Namespace, target: TargetConfig, filtered_results: list) -> tuple[str, bool]:
+def _render_report_content(args: argparse.Namespace, target: TargetConfig, filtered_results: list) -> tuple[str, bool, NotificationTarget | None]:
     delivery_target, exit_code = _resolve_delivery_target_or_exit(target, args.notify_target)
     if exit_code is not None:
         raise SystemExit(exit_code)
@@ -162,20 +170,20 @@ def _render_report_content(args: argparse.Namespace, target: TargetConfig, filte
             filtered_results,
             delivery_target=delivery_target,
             source_command='daily-report',
-        ), True
+        ), True, delivery_target
     if args.notify_format == 'text':
         return render_notification_text(
             args.target_name,
             filtered_results,
             delivery_target=delivery_target,
             source_command='daily-report',
-        ), False
+        ), False, delivery_target
     if args.json:
-        return render_report_summary(filtered_results, as_json=True), True
+        return render_report_summary(filtered_results, as_json=True), True, None
     blocks = [render_report_summary(filtered_results)]
     for result in filtered_results:
         blocks.append(render_result(result))
-    return '\n\n'.join(blocks), False
+    return '\n\n'.join(blocks), False, None
 
 
 def _render_diagnosis_content(args: argparse.Namespace, target: TargetConfig, filtered_results: list) -> tuple[str, bool, object]:
@@ -225,6 +233,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error('Use either --output or --output-dir, not both')
     if getattr(args, 'json', False) and getattr(args, 'notify_format', None):
         parser.error('Use either --json or --notify-format, not both')
+    if getattr(args, 'deliver', False) and not getattr(args, 'notify_target', None):
+        parser.error('--deliver requires --notify-target')
 
     if args.command == 'about':
         print('AI Site Caretaker')
@@ -264,9 +274,10 @@ def main(argv: list[str] | None = None) -> int:
             min_severity=args.min_severity,
         )
         try:
-            content, as_json = _render_report_content(args, target, filtered_results)
+            content, as_json, delivery_target = _render_report_content(args, target, filtered_results)
         except SystemExit as exc:
             return int(exc.code)
+        print_content = not (args.deliver and delivery_target is not None and delivery_target.type == 'stdout')
         _emit_output(
             content,
             command_name='daily-report',
@@ -277,7 +288,26 @@ def main(argv: list[str] | None = None) -> int:
             timestamped=args.timestamped,
             alerts_only=args.alerts_only,
             min_severity=args.min_severity,
+            print_content=print_content,
         )
+        if args.deliver:
+            if delivery_target is None:
+                print('Notification target not found or not selected for delivery.')
+                return 1
+            if not should_deliver(filtered_results, delivery_target):
+                print(f'Delivery skipped for {delivery_target.name}: disabled or below min_severity threshold.')
+            else:
+                try:
+                    print(deliver_notification(
+                        content,
+                        delivery_target=delivery_target,
+                        as_json=as_json,
+                        source_command='daily-report',
+                        monitored_target=args.target_name,
+                    ))
+                except DeliveryError as exc:
+                    print(str(exc))
+                    return 1
         failures = sum(1 for result in filtered_results if not result.ok)
         return 0 if failures == 0 else 1
 
@@ -295,6 +325,10 @@ def main(argv: list[str] | None = None) -> int:
             content, as_json, diagnosis = _render_diagnosis_content(args, target, filtered_results)
         except SystemExit as exc:
             return int(exc.code)
+        delivery_target, exit_code = _resolve_delivery_target_or_exit(target, args.notify_target)
+        if exit_code is not None:
+            return exit_code
+        print_content = not (args.deliver and delivery_target is not None and delivery_target.type == 'stdout')
         _emit_output(
             content,
             command_name='diagnose-target',
@@ -305,7 +339,26 @@ def main(argv: list[str] | None = None) -> int:
             timestamped=args.timestamped,
             alerts_only=args.alerts_only,
             min_severity=args.min_severity,
+            print_content=print_content,
         )
+        if args.deliver:
+            if delivery_target is None:
+                print('Notification target not found or not selected for delivery.')
+                return 1
+            if not should_deliver(filtered_results, delivery_target):
+                print(f'Delivery skipped for {delivery_target.name}: disabled or below min_severity threshold.')
+            else:
+                try:
+                    print(deliver_notification(
+                        content,
+                        delivery_target=delivery_target,
+                        as_json=as_json,
+                        source_command='diagnose-target',
+                        monitored_target=args.target_name,
+                    ))
+                except DeliveryError as exc:
+                    print(str(exc))
+                    return 1
         return 0 if diagnosis.healthy else 1
 
     parser.error(f'Unknown command: {args.command}')

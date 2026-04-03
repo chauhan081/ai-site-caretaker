@@ -64,6 +64,50 @@ class MainNotificationTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertIn('Notification target not found: missing', stdout.getvalue())
 
+    def test_daily_report_can_deliver_to_file_target(self) -> None:
+        stdout = io.StringIO()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / 'delivered.txt'
+            target = TargetConfig(
+                name='demo',
+                host='example.com',
+                checks=['server'],
+                notification_targets=[
+                    NotificationTarget(name='ops-file', type='file', destination=str(output_path), min_severity='medium')
+                ],
+            )
+            with patch('src.main.load_targets', return_value=[target]), patch(
+                'src.main.build_daily_report',
+                return_value=[CheckResult(name='check-server:80', ok=False, summary='Connection refused', details={'port': 80})],
+            ):
+                with redirect_stdout(stdout):
+                    exit_code = main(['daily-report', 'demo', '--notify-format', 'text', '--notify-target', 'ops-file', '--deliver'])
+
+            self.assertEqual(exit_code, 1)
+            self.assertTrue(output_path.exists())
+            self.assertIn('Delivered notification to ops-file', stdout.getvalue())
+            self.assertIn('check-server:80', output_path.read_text(encoding='utf-8'))
+
+    def test_daily_report_skips_delivery_when_below_threshold(self) -> None:
+        stdout = io.StringIO()
+        target = TargetConfig(
+            name='demo',
+            host='example.com',
+            checks=['server'],
+            notification_targets=[
+                NotificationTarget(name='ops-file', type='file', destination='ignored.txt', min_severity='critical')
+            ],
+        )
+        with patch('src.main.load_targets', return_value=[target]), patch(
+            'src.main.build_daily_report',
+            return_value=[CheckResult(name='check-server:443', ok=True, summary='TCP ok', details={'port': 443})],
+        ):
+            with redirect_stdout(stdout):
+                exit_code = main(['daily-report', 'demo', '--notify-format', 'text', '--notify-target', 'ops-file', '--deliver'])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn('Delivery skipped for ops-file', stdout.getvalue())
+
 
 if __name__ == '__main__':
     unittest.main()

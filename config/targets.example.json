@@ -17,9 +17,16 @@
         },
         {
           "name": "slack-webhook",
-          "type": "webhook",
+          "type": "slack",
           "destination": "https://hooks.slack.com/services/replace/me",
           "min_severity": "medium",
+          "enabled": true
+        },
+        {
+          "name": "local-file",
+          "type": "file",
+          "destination": "reports/example-site-notify.txt",
+          "min_severity": "low",
           "enabled": true
         }
       ],

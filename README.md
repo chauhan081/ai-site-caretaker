@@ -9,7 +9,7 @@ CLI-first AI website/server caretaker for small businesses and agencies.
 - Log reading with severity-aware summaries and recurring-pattern grouping
 - Target config management
 - Daily report generation
-- Notification-friendly output for future delivery integrations
+- Notification-friendly output plus practical CLI delivery integrations
 - Safe execution guardrails
 
 ## Project structure
@@ -51,6 +51,8 @@ ai-site-caretaker about
 - `python -m src.main diagnose-target example-site --alerts-only --min-severity medium`
 - `python -m src.main diagnose-target example-site --notify-format text --notify-target slack-webhook`
 - `python -m src.main diagnose-target example-site --notify-format json --output reports/example-site-diagnosis-notify.json`
+- `python -m src.main daily-report example-site --alerts-only --notify-format text --notify-target local-file --deliver`
+- `python -m src.main diagnose-target example-site --notify-format json --notify-target slack-webhook --deliver`
 - `ai-site-caretaker about` (after `pip install -e .`)
 
 ## Config
@@ -87,8 +89,8 @@ Create `config/targets.json` using `config/targets.example.json` as a template:
 - `log_paths`: inspect one or more log files during report generation
 - `notification_targets`: optional named delivery definitions for email/webhook/stdout/slack-style destinations
   - `name`: lookup key for `--notify-target`
-  - `type`: one of `email`, `webhook`, `stdout`, `slack`
-  - `destination`: address, URL, or channel identifier to annotate the payload
+  - `type`: one of `email`, `webhook`, `stdout`, `file`, `slack`
+  - `destination`: address, URL, stream name (`stdout`/`stderr`), or local file path depending on type
   - `min_severity`: optional future-facing routing hint stored in the payload
   - `enabled`: optional boolean flag for config hygiene
 - If `checks` is omitted, the default flow is `site + ssl + server`
@@ -123,7 +125,7 @@ python -m src.main diagnose-target example-site --alerts-only --min-severity med
 - If no checks match the filter, diagnosis output reports that the alert filter matched nothing
 
 ### Notification-friendly output
-Both aggregate commands can emit compact alert text or structured JSON for later delivery integrations:
+Both aggregate commands can emit compact alert text or structured JSON, and can optionally deliver that payload when you explicitly add `--deliver`:
 
 ```text
 python -m src.main daily-report example-site --alerts-only --notify-format text --notify-target ops-email
@@ -132,7 +134,10 @@ python -m src.main diagnose-target example-site --min-severity high --notify-for
 
 - `--notify-format text` emits a compact, message-ready alert body
 - `--notify-format json` emits a structured payload containing source command, target, health, severity, results, optional diagnosis, and optional delivery-target metadata
-- `--notify-target` looks up metadata from `notification_targets` in config so a scheduler or wrapper script can route the payload later
+- `--notify-target` looks up metadata from `notification_targets` in config
+- `--deliver` is opt-in and performs the real delivery step for `webhook`, `slack`, `stdout`, or `file` targets
+- `email` targets remain metadata-only for now; using `--deliver` with an email target fails fast with a clear message
+- delivery respects each target's `enabled` flag and `min_severity` threshold
 - `--json` and `--notify-format` are mutually exclusive to keep output shapes predictable
 
 ### Exporting reports
@@ -193,6 +198,7 @@ Produces structured output like:
 - Structured JSON output added for aggregate report/diagnosis commands
 - Alert-focused filtering added for daily reports and diagnoses (`--alerts-only`, `--min-severity`)
 - Notification-friendly text/JSON output added with named delivery-target config metadata (`--notify-format`, `--notify-target`)
+- Explicit delivery adapters added for webhook/slack POSTs and local stdout/file targets (`--deliver`)
 - Automated `unittest` coverage currently passing for the implemented modules
 
 ## Status

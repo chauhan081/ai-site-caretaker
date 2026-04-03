@@ -5,7 +5,7 @@ from .severity import SEVERITY_ORDER
 
 
 ALLOWED_CHECKS = {'site', 'ssl', 'server', 'logs'}
-ALLOWED_NOTIFICATION_TYPES = {'email', 'webhook', 'stdout', 'slack'}
+ALLOWED_NOTIFICATION_TYPES = {'email', 'webhook', 'stdout', 'file', 'slack'}
 
 
 
