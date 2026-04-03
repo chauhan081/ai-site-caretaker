@@ -54,11 +54,20 @@ Create `config/targets.json` using `config/targets.example.json` as a template:
       "name": "example-site",
       "url": "https://example.com",
       "host": "example.com",
+      "checks": ["site", "ssl", "server"],
+      "server_ports": [80, 443],
+      "log_paths": ["/var/log/nginx/error.log"],
       "notes": "Default starter target"
     }
   ]
 }
 ```
+
+### Config fields
+- `checks`: choose from `site`, `ssl`, `server`, `logs`
+- `server_ports`: run the server check against multiple ports
+- `log_paths`: inspect one or more log files during report generation
+- If `checks` is omitted, the default flow is `site + ssl + server`
 
 ## Example output
 ### Text report

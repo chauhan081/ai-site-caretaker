@@ -18,6 +18,9 @@ class TargetConfig:
     url: str | None = None
     host: str | None = None
     notes: str | None = None
+    checks: list[str] = field(default_factory=list)
+    server_ports: list[int] = field(default_factory=list)
+    log_paths: list[str] = field(default_factory=list)
 
 
 @dataclass

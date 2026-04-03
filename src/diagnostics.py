@@ -13,6 +13,13 @@ FAILURE_HINTS = {
 
 
 
+def _base_name(result_name: str) -> str:
+    if ':' in result_name:
+        return result_name.split(':', 1)[0]
+    return result_name
+
+
+
 def build_diagnosis(results: list[CheckResult]) -> DiagnosisReport:
     failures = [result for result in results if not result.ok]
     healthy = len(failures) == 0
@@ -20,23 +27,24 @@ def build_diagnosis(results: list[CheckResult]) -> DiagnosisReport:
     recommended_actions: list[str] = []
 
     for result in failures:
-        probable_causes.append(FAILURE_HINTS.get(result.name, f'Failure detected in {result.name}.'))
-        if result.name == 'check-site':
+        base_name = _base_name(result.name)
+        probable_causes.append(FAILURE_HINTS.get(base_name, f'Failure detected in {result.name}.'))
+        if base_name == 'check-site':
             recommended_actions.extend([
                 'Retry the endpoint manually and confirm expected status code.',
                 'Check application logs around the failed request window.',
             ])
-        elif result.name == 'check-ssl':
+        elif base_name == 'check-ssl':
             recommended_actions.extend([
                 'Inspect certificate expiry and auto-renew configuration.',
                 'Confirm the correct certificate is served for the hostname.',
             ])
-        elif result.name == 'check-server':
+        elif base_name == 'check-server':
             recommended_actions.extend([
                 'Verify firewall/security-group rules for the target port.',
                 'Check whether the service is listening on the expected interface.',
             ])
-        elif result.name == 'read-logs':
+        elif base_name == 'read-logs':
             recommended_actions.extend([
                 'Review the latest error-like log lines for stack traces or repeating failures.',
                 'Compare recent deploys, env changes, and dependency updates.',

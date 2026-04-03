@@ -17,4 +17,11 @@ def load_targets(path: Path | None = None) -> list[TargetConfig]:
         return []
     payload = json.loads(config_path.read_text(encoding='utf-8'))
     targets = payload.get('targets', [])
-    return [TargetConfig(**target) for target in targets]
+    normalized_targets: list[TargetConfig] = []
+    for target in targets:
+        normalized = dict(target)
+        normalized.setdefault('checks', [])
+        normalized.setdefault('server_ports', [])
+        normalized.setdefault('log_paths', [])
+        normalized_targets.append(TargetConfig(**normalized))
+    return normalized_targets

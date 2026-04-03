@@ -10,7 +10,7 @@ SEVERITY_ORDER = ('info', 'low', 'medium', 'high', 'critical')
 def infer_severity(result: CheckResult) -> str:
     if result.ok:
         return 'info'
-    if result.name == 'check-ssl':
+    if result.name.startswith('check-ssl'):
         days_left = result.details.get('days_left')
         if isinstance(days_left, int):
             if days_left <= 3:
@@ -19,14 +19,14 @@ def infer_severity(result: CheckResult) -> str:
                 return 'high'
             return 'medium'
         return 'high'
-    if result.name == 'check-site':
+    if result.name.startswith('check-site'):
         status = result.details.get('status')
         if isinstance(status, int) and status >= 500:
             return 'critical'
         return 'high'
-    if result.name == 'check-server':
+    if result.name.startswith('check-server'):
         return 'high'
-    if result.name == 'read-logs':
+    if result.name.startswith('read-logs'):
         errors = result.details.get('error_like_lines', 0)
         if isinstance(errors, int) and errors >= 10:
             return 'critical'
