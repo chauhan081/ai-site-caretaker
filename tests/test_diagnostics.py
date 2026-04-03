@@ -14,6 +14,13 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertIn('check-site', report.failed_checks)
         self.assertTrue(report.recommended_actions)
 
+    def test_build_diagnosis_for_empty_filtered_results(self) -> None:
+        report = build_diagnosis([])
+
+        self.assertTrue(report.healthy)
+        self.assertEqual(report.summary, 'No checks matched the alert filters.')
+        self.assertEqual(report.overall_severity, 'info')
+
 
 if __name__ == '__main__':
     unittest.main()

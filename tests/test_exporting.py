@@ -62,6 +62,54 @@ class ExportingTests(unittest.TestCase):
             self.assertEqual(payload['results'][0]['name'], f'read-logs:{log_path}')
             self.assertIn('Exported report to', stdout.getvalue())
 
+    def test_diagnose_target_can_export_alert_filtered_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(__file__).resolve().parent.parent
+            config_path = repo_root / 'config' / 'targets.json'
+            backup = config_path.read_text(encoding='utf-8') if config_path.exists() else None
+            log_path = Path(temp_dir) / 'missing-app.log'
+            output_path = Path(temp_dir) / 'exports' / 'diagnosis-alerts.json'
+            config_path.write_text(
+                json.dumps(
+                    {
+                        'targets': [
+                            {
+                                'name': 'alerts-demo',
+                                'checks': ['logs'],
+                                'log_paths': [str(log_path)],
+                            }
+                        ]
+                    }
+                ),
+                encoding='utf-8',
+            )
+            stdout = io.StringIO()
+            try:
+                with redirect_stdout(stdout):
+                    exit_code = main([
+                        'diagnose-target',
+                        'alerts-demo',
+                        '--json',
+                        '--alerts-only',
+                        '--min-severity',
+                        'medium',
+                        '--output',
+                        str(output_path),
+                    ])
+            finally:
+                if backup is None:
+                    config_path.unlink(missing_ok=True)
+                else:
+                    config_path.write_text(backup, encoding='utf-8')
+
+            self.assertEqual(exit_code, 1)
+            payload = json.loads(output_path.read_text(encoding='utf-8'))
+            self.assertEqual(payload['overall_severity'], 'medium')
+            self.assertEqual(len(payload['results']), 1)
+            self.assertTrue(payload['results'][0]['name'].startswith('read-logs:'))
+            self.assertEqual(payload['diagnosis']['failed_checks'], [f'read-logs:{log_path}'])
+            self.assertIn('Exported report to', stdout.getvalue())
+
 
 if __name__ == '__main__':
     unittest.main()

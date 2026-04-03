@@ -21,6 +21,13 @@ def _base_name(result_name: str) -> str:
 
 
 def build_diagnosis(results: list[CheckResult]) -> DiagnosisReport:
+    if not results:
+        return DiagnosisReport(
+            healthy=True,
+            summary='No checks matched the alert filters.',
+            overall_severity='info',
+        )
+
     failures = [result for result in results if not result.ok]
     healthy = len(failures) == 0
     probable_causes: list[str] = []

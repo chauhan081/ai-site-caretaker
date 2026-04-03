@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .alerts import VALID_ALERT_SEVERITIES, filter_results
 from .checks import check_server, check_site, check_ssl
 from .config_loader import EXAMPLE_CONFIG_PATH, load_targets
 from .diagnostics import build_diagnosis
@@ -15,6 +16,20 @@ from .validation import validate_target
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+
+def _add_alert_filter_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        '--alerts-only',
+        action='store_true',
+        help='Only include failed checks in the rendered aggregate output',
+    )
+    parser.add_argument(
+        '--min-severity',
+        choices=VALID_ALERT_SEVERITIES,
+        help='Only include checks at or above the selected severity threshold',
+    )
 
 
 
@@ -45,11 +60,13 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser.add_argument('target_name')
     report_parser.add_argument('--json', action='store_true')
     report_parser.add_argument('--output', help='Write the rendered report to a .txt or .json file')
+    _add_alert_filter_args(report_parser)
 
     diagnose_parser = subparsers.add_parser('diagnose-target', help='Run checks and produce a diagnosis for a configured target')
     diagnose_parser.add_argument('target_name')
     diagnose_parser.add_argument('--json', action='store_true')
     diagnose_parser.add_argument('--output', help='Write the rendered diagnosis to a .txt or .json file')
+    _add_alert_filter_args(diagnose_parser)
 
     subparsers.add_parser('about', help='Show project info')
     return parser
@@ -117,15 +134,20 @@ def main(argv: list[str] | None = None) -> int:
         if exit_code is not None:
             return exit_code
         results = build_daily_report(target)
+        filtered_results = filter_results(
+            results,
+            alerts_only=args.alerts_only,
+            min_severity=args.min_severity,
+        )
         if args.json:
-            content = render_report_summary(results, as_json=True)
+            content = render_report_summary(filtered_results, as_json=True)
         else:
-            blocks = [render_report_summary(results)]
-            for result in results:
+            blocks = [render_report_summary(filtered_results)]
+            for result in filtered_results:
                 blocks.append(render_result(result))
             content = '\n\n'.join(blocks)
         _emit_output(content, args.output)
-        failures = sum(1 for result in results if not result.ok)
+        failures = sum(1 for result in filtered_results if not result.ok)
         return 0 if failures == 0 else 1
 
     if args.command == 'diagnose-target':
@@ -133,15 +155,20 @@ def main(argv: list[str] | None = None) -> int:
         if exit_code is not None:
             return exit_code
         results = build_daily_report(target)
-        diagnosis = build_diagnosis(results)
+        filtered_results = filter_results(
+            results,
+            alerts_only=args.alerts_only,
+            min_severity=args.min_severity,
+        )
+        diagnosis = build_diagnosis(filtered_results)
         if args.json:
-            payload = serialize_report_summary(results)
+            payload = serialize_report_summary(filtered_results)
             payload['diagnosis'] = serialize_diagnosis(diagnosis)
             import json
             content = json.dumps(payload, indent=2)
         else:
-            blocks = [render_report_summary(results)]
-            blocks.extend(render_result(result) for result in results)
+            blocks = [render_report_summary(filtered_results)]
+            blocks.extend(render_result(result) for result in filtered_results)
             blocks.append(render_diagnosis(diagnosis))
             content = '\n\n'.join(blocks)
         _emit_output(content, args.output)

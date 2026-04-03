@@ -40,9 +40,12 @@ ai-site-caretaker about
 - `python -m src.main read-logs path/to/app.log --lines 50`
 - `python -m src.main daily-report example-site`
 - `python -m src.main daily-report example-site --json`
+- `python -m src.main daily-report example-site --alerts-only`
+- `python -m src.main daily-report example-site --min-severity high --output reports/example-site-alerts.txt`
 - `python -m src.main daily-report example-site --json --output reports/example-site.json`
 - `python -m src.main diagnose-target example-site`
 - `python -m src.main diagnose-target example-site --json`
+- `python -m src.main diagnose-target example-site --alerts-only --min-severity medium`
 - `python -m src.main diagnose-target example-site --output reports/example-site-diagnosis.txt`
 - `ai-site-caretaker about` (after `pip install -e .`)
 
@@ -87,12 +90,26 @@ Overall severity: INFO
 - [OK] check-server | severity=info | TCP connection to example.com:80 succeeded
 ```
 
+### Alert-focused output
+Both aggregate commands support alert filtering before rendering or exporting:
+
+```text
+python -m src.main daily-report example-site --alerts-only
+python -m src.main daily-report example-site --min-severity high
+python -m src.main diagnose-target example-site --alerts-only --min-severity medium
+```
+
+- `--alerts-only` keeps only failed checks
+- `--min-severity` keeps checks at or above `low`, `medium`, `high`, or `critical`
+- If no checks match the filter, diagnosis output reports that the alert filter matched nothing
+
 ### Exporting reports
-Both aggregate commands can write their rendered output to disk:
+Both aggregate commands can write their rendered output to disk, including alert-filtered output:
 
 ```text
 python -m src.main daily-report example-site --json --output reports/example-site.json
-python -m src.main diagnose-target example-site --output reports/example-site-diagnosis.txt
+python -m src.main daily-report example-site --alerts-only --output reports/example-site-alerts.txt
+python -m src.main diagnose-target example-site --alerts-only --min-severity medium --output reports/example-site-diagnosis.json
 ```
 
 Supported export formats are `.json` and `.txt`. Parent folders are created automatically.
@@ -139,6 +156,7 @@ Produces structured output like:
 - Diagnosis flow and target validation added
 - Severity tagging and report summary formatting added
 - Structured JSON output added for aggregate report/diagnosis commands
+- Alert-focused filtering added for daily reports and diagnoses (`--alerts-only`, `--min-severity`)
 - Automated `unittest` coverage currently passing for the implemented modules
 
 ## Status
