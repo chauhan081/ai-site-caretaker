@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .models import TargetConfig
+from .models import NotificationTarget, TargetConfig
 
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / 'config' / 'targets.json'
@@ -23,5 +23,9 @@ def load_targets(path: Path | None = None) -> list[TargetConfig]:
         normalized.setdefault('checks', [])
         normalized.setdefault('server_ports', [])
         normalized.setdefault('log_paths', [])
+        notification_targets = []
+        for notification_target in normalized.get('notification_targets', []):
+            notification_targets.append(NotificationTarget(**notification_target))
+        normalized['notification_targets'] = notification_targets
         normalized_targets.append(TargetConfig(**normalized))
     return normalized_targets

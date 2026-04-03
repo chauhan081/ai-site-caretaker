@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from .models import TargetConfig
+from .severity import SEVERITY_ORDER
 
 
 ALLOWED_CHECKS = {'site', 'ssl', 'server', 'logs'}
+ALLOWED_NOTIFICATION_TYPES = {'email', 'webhook', 'stdout', 'slack'}
 
 
 
@@ -28,4 +30,22 @@ def validate_target(target: TargetConfig) -> list[str]:
         errors.append('The server check requires target.host.')
     if 'logs' in target.checks and not target.log_paths:
         errors.append('The logs check requires at least one log path.')
+    seen_notification_names: set[str] = set()
+    for notification_target in target.notification_targets:
+        if not notification_target.name:
+            errors.append('Notification targets require a name.')
+        elif notification_target.name in seen_notification_names:
+            errors.append(f'Duplicate notification target name: {notification_target.name}.')
+        else:
+            seen_notification_names.add(notification_target.name)
+        if notification_target.type not in ALLOWED_NOTIFICATION_TYPES:
+            errors.append(
+                f"Unsupported notification target type for {notification_target.name or '<unnamed>'}: {notification_target.type}."
+            )
+        if not notification_target.destination:
+            errors.append(f'Notification target {notification_target.name or "<unnamed>"} requires a destination.')
+        if notification_target.min_severity is not None and notification_target.min_severity not in SEVERITY_ORDER:
+            errors.append(
+                f"Notification target {notification_target.name or '<unnamed>'} has invalid min_severity: {notification_target.min_severity}."
+            )
     return errors

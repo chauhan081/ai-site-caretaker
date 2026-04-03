@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from .alerts import VALID_ALERT_SEVERITIES, filter_results
@@ -9,6 +10,8 @@ from .config_loader import EXAMPLE_CONFIG_PATH, load_targets
 from .diagnostics import build_diagnosis
 from .exporting import export_text, resolve_export_path
 from .logs import read_logs
+from .models import NotificationTarget, TargetConfig
+from .notifications import render_notification_json, render_notification_text, resolve_notification_target
 from .output import render_diagnosis, render_result, serialize_diagnosis
 from .report_format import render_report_summary, serialize_report_summary
 from .reporting import build_daily_report
@@ -16,7 +19,6 @@ from .validation import validate_target
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
 
 
 def _add_alert_filter_args(parser: argparse.ArgumentParser) -> None:
@@ -32,7 +34,6 @@ def _add_alert_filter_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-
 def _add_export_args(parser: argparse.ArgumentParser, noun: str) -> None:
     parser.add_argument('--output', help=f'Write the rendered {noun} to a .txt or .json file')
     parser.add_argument(
@@ -45,6 +46,17 @@ def _add_export_args(parser: argparse.ArgumentParser, noun: str) -> None:
         help='Append YYYYMMDD-HHMMSS to exported filenames (useful for scheduled runs)',
     )
 
+
+def _add_notification_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        '--notify-format',
+        choices=('text', 'json'),
+        help='Emit a notification-friendly payload instead of the full report/diagnosis output',
+    )
+    parser.add_argument(
+        '--notify-target',
+        help='Use a named notification target from config/targets.json to annotate the payload',
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -75,19 +87,20 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser.add_argument('--json', action='store_true')
     _add_export_args(report_parser, 'report')
     _add_alert_filter_args(report_parser)
+    _add_notification_args(report_parser)
 
     diagnose_parser = subparsers.add_parser('diagnose-target', help='Run checks and produce a diagnosis for a configured target')
     diagnose_parser.add_argument('target_name')
     diagnose_parser.add_argument('--json', action='store_true')
     _add_export_args(diagnose_parser, 'diagnosis')
     _add_alert_filter_args(diagnose_parser)
+    _add_notification_args(diagnose_parser)
 
     subparsers.add_parser('about', help='Show project info')
     return parser
 
 
-
-def _load_target_or_exit(target_name: str) -> tuple[object | None, int | None]:
+def _load_target_or_exit(target_name: str) -> tuple[TargetConfig | None, int | None]:
     targets = {target.name: target for target in load_targets()}
     target = targets.get(target_name)
     if target is None:
@@ -102,6 +115,13 @@ def _load_target_or_exit(target_name: str) -> tuple[object | None, int | None]:
         return None, 1
     return target, None
 
+
+def _resolve_delivery_target_or_exit(target: TargetConfig, notify_target_name: str | None) -> tuple[NotificationTarget | None, int | None]:
+    delivery_target = resolve_notification_target(target.notification_targets, notify_target_name)
+    if notify_target_name and delivery_target is None:
+        print(f'Notification target not found: {notify_target_name}')
+        return None, 1
+    return delivery_target, None
 
 
 def _emit_output(
@@ -132,6 +152,70 @@ def _emit_output(
         print(f'Exported report to {destination}')
 
 
+def _render_report_content(args: argparse.Namespace, target: TargetConfig, filtered_results: list) -> tuple[str, bool]:
+    delivery_target, exit_code = _resolve_delivery_target_or_exit(target, args.notify_target)
+    if exit_code is not None:
+        raise SystemExit(exit_code)
+    if args.notify_format == 'json':
+        return render_notification_json(
+            args.target_name,
+            filtered_results,
+            delivery_target=delivery_target,
+            source_command='daily-report',
+        ), True
+    if args.notify_format == 'text':
+        return render_notification_text(
+            args.target_name,
+            filtered_results,
+            delivery_target=delivery_target,
+            source_command='daily-report',
+        ), False
+    if args.json:
+        return render_report_summary(filtered_results, as_json=True), True
+    blocks = [render_report_summary(filtered_results)]
+    for result in filtered_results:
+        blocks.append(render_result(result))
+    return '\n\n'.join(blocks), False
+
+
+def _render_diagnosis_content(args: argparse.Namespace, target: TargetConfig, filtered_results: list) -> tuple[str, bool, object]:
+    diagnosis = build_diagnosis(filtered_results)
+    delivery_target, exit_code = _resolve_delivery_target_or_exit(target, args.notify_target)
+    if exit_code is not None:
+        raise SystemExit(exit_code)
+    if args.notify_format == 'json':
+        return (
+            render_notification_json(
+                args.target_name,
+                filtered_results,
+                diagnosis=diagnosis,
+                delivery_target=delivery_target,
+                source_command='diagnose-target',
+            ),
+            True,
+            diagnosis,
+        )
+    if args.notify_format == 'text':
+        return (
+            render_notification_text(
+                args.target_name,
+                filtered_results,
+                diagnosis=diagnosis,
+                delivery_target=delivery_target,
+                source_command='diagnose-target',
+            ),
+            False,
+            diagnosis,
+        )
+    if args.json:
+        payload = serialize_report_summary(filtered_results)
+        payload['diagnosis'] = serialize_diagnosis(diagnosis)
+        return json.dumps(payload, indent=2), True, diagnosis
+    blocks = [render_report_summary(filtered_results)]
+    blocks.extend(render_result(result) for result in filtered_results)
+    blocks.append(render_diagnosis(diagnosis))
+    return '\n\n'.join(blocks), False, diagnosis
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
@@ -139,6 +223,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if getattr(args, 'output', None) and getattr(args, 'output_dir', None):
         parser.error('Use either --output or --output-dir, not both')
+    if getattr(args, 'json', False) and getattr(args, 'notify_format', None):
+        parser.error('Use either --json or --notify-format, not both')
 
     if args.command == 'about':
         print('AI Site Caretaker')
@@ -169,26 +255,23 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == 'daily-report':
         target, exit_code = _load_target_or_exit(args.target_name)
-        if exit_code is not None:
-            return exit_code
+        if exit_code is not None or target is None:
+            return exit_code or 1
         results = build_daily_report(target)
         filtered_results = filter_results(
             results,
             alerts_only=args.alerts_only,
             min_severity=args.min_severity,
         )
-        if args.json:
-            content = render_report_summary(filtered_results, as_json=True)
-        else:
-            blocks = [render_report_summary(filtered_results)]
-            for result in filtered_results:
-                blocks.append(render_result(result))
-            content = '\n\n'.join(blocks)
+        try:
+            content, as_json = _render_report_content(args, target, filtered_results)
+        except SystemExit as exc:
+            return int(exc.code)
         _emit_output(
             content,
             command_name='daily-report',
             target_name=args.target_name,
-            as_json=args.json,
+            as_json=as_json,
             output_path=args.output,
             output_dir=args.output_dir,
             timestamped=args.timestamped,
@@ -200,30 +283,23 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == 'diagnose-target':
         target, exit_code = _load_target_or_exit(args.target_name)
-        if exit_code is not None:
-            return exit_code
+        if exit_code is not None or target is None:
+            return exit_code or 1
         results = build_daily_report(target)
         filtered_results = filter_results(
             results,
             alerts_only=args.alerts_only,
             min_severity=args.min_severity,
         )
-        diagnosis = build_diagnosis(filtered_results)
-        if args.json:
-            payload = serialize_report_summary(filtered_results)
-            payload['diagnosis'] = serialize_diagnosis(diagnosis)
-            import json
-            content = json.dumps(payload, indent=2)
-        else:
-            blocks = [render_report_summary(filtered_results)]
-            blocks.extend(render_result(result) for result in filtered_results)
-            blocks.append(render_diagnosis(diagnosis))
-            content = '\n\n'.join(blocks)
+        try:
+            content, as_json, diagnosis = _render_diagnosis_content(args, target, filtered_results)
+        except SystemExit as exc:
+            return int(exc.code)
         _emit_output(
             content,
             command_name='diagnose-target',
             target_name=args.target_name,
-            as_json=args.json,
+            as_json=as_json,
             output_path=args.output,
             output_dir=args.output_dir,
             timestamped=args.timestamped,

@@ -9,6 +9,7 @@ CLI-first AI website/server caretaker for small businesses and agencies.
 - Log reading with severity-aware summaries and recurring-pattern grouping
 - Target config management
 - Daily report generation
+- Notification-friendly output for future delivery integrations
 - Safe execution guardrails
 
 ## Project structure
@@ -43,12 +44,13 @@ ai-site-caretaker about
 - `python -m src.main daily-report example-site --json`
 - `python -m src.main daily-report example-site --alerts-only`
 - `python -m src.main daily-report example-site --min-severity high --output reports/example-site-alerts.txt`
-- `python -m src.main daily-report example-site --json --output reports/example-site.json`
-- `python -m src.main daily-report example-site --json --output-dir reports --timestamped`
+- `python -m src.main daily-report example-site --notify-format text --notify-target ops-email`
+- `python -m src.main daily-report example-site --notify-format json --output reports/example-site-notify.json`
 - `python -m src.main diagnose-target example-site`
 - `python -m src.main diagnose-target example-site --json`
 - `python -m src.main diagnose-target example-site --alerts-only --min-severity medium`
-- `python -m src.main diagnose-target example-site --output reports/example-site-diagnosis.txt`
+- `python -m src.main diagnose-target example-site --notify-format text --notify-target slack-webhook`
+- `python -m src.main diagnose-target example-site --notify-format json --output reports/example-site-diagnosis-notify.json`
 - `ai-site-caretaker about` (after `pip install -e .`)
 
 ## Config
@@ -61,9 +63,18 @@ Create `config/targets.json` using `config/targets.example.json` as a template:
       "name": "example-site",
       "url": "https://example.com",
       "host": "example.com",
-      "checks": ["site", "ssl", "server"],
+      "checks": ["site", "ssl", "server", "logs"],
       "server_ports": [80, 443],
       "log_paths": ["/var/log/nginx/error.log"],
+      "notification_targets": [
+        {
+          "name": "ops-email",
+          "type": "email",
+          "destination": "ops@example.com",
+          "min_severity": "high",
+          "enabled": true
+        }
+      ],
       "notes": "Default starter target"
     }
   ]
@@ -74,6 +85,12 @@ Create `config/targets.json` using `config/targets.example.json` as a template:
 - `checks`: choose from `site`, `ssl`, `server`, `logs`
 - `server_ports`: run the server check against multiple ports
 - `log_paths`: inspect one or more log files during report generation
+- `notification_targets`: optional named delivery definitions for email/webhook/stdout/slack-style destinations
+  - `name`: lookup key for `--notify-target`
+  - `type`: one of `email`, `webhook`, `stdout`, `slack`
+  - `destination`: address, URL, or channel identifier to annotate the payload
+  - `min_severity`: optional future-facing routing hint stored in the payload
+  - `enabled`: optional boolean flag for config hygiene
 - If `checks` is omitted, the default flow is `site + ssl + server`
 
 ## Example output
@@ -89,7 +106,7 @@ Overall severity: INFO
 
 - [OK] check-site | severity=info | HTTP 200 from https://example.com
 - [OK] check-ssl | severity=info | SSL valid for 89 day(s) on example.com
-- [OK] check-server | severity=info | TCP connection to example.com:80 succeeded
+- [OK] check-server:80 | severity=info | TCP connection to example.com:80 succeeded
 ```
 
 ### Alert-focused output
@@ -105,13 +122,26 @@ python -m src.main diagnose-target example-site --alerts-only --min-severity med
 - `--min-severity` keeps checks at or above `low`, `medium`, `high`, or `critical`
 - If no checks match the filter, diagnosis output reports that the alert filter matched nothing
 
+### Notification-friendly output
+Both aggregate commands can emit compact alert text or structured JSON for later delivery integrations:
+
+```text
+python -m src.main daily-report example-site --alerts-only --notify-format text --notify-target ops-email
+python -m src.main diagnose-target example-site --min-severity high --notify-format json --output reports/example-site-notify.json
+```
+
+- `--notify-format text` emits a compact, message-ready alert body
+- `--notify-format json` emits a structured payload containing source command, target, health, severity, results, optional diagnosis, and optional delivery-target metadata
+- `--notify-target` looks up metadata from `notification_targets` in config so a scheduler or wrapper script can route the payload later
+- `--json` and `--notify-format` are mutually exclusive to keep output shapes predictable
+
 ### Exporting reports
-Both aggregate commands can write their rendered output to disk, including alert-filtered output:
+Both aggregate commands can write their rendered output to disk, including alert-filtered and notification-oriented output:
 
 ```text
 python -m src.main daily-report example-site --json --output reports/example-site.json
 python -m src.main daily-report example-site --alerts-only --output reports/example-site-alerts.txt
-python -m src.main daily-report example-site --json --output-dir reports --timestamped
+python -m src.main daily-report example-site --notify-format json --output-dir reports --timestamped
 python -m src.main diagnose-target example-site --alerts-only --min-severity medium --output reports/example-site-diagnosis.json
 ```
 
@@ -156,15 +186,16 @@ Produces structured output like:
 - Core CLI scaffold is working
 - Health checks implemented: site, SSL, server
 - Target config loading added
-- Log tail reader added
+- Log tail reader added with recurring-pattern summaries
 - Daily report flow added
 - Diagnosis flow and target validation added
 - Severity tagging and report summary formatting added
 - Structured JSON output added for aggregate report/diagnosis commands
 - Alert-focused filtering added for daily reports and diagnoses (`--alerts-only`, `--min-severity`)
+- Notification-friendly text/JSON output added with named delivery-target config metadata (`--notify-format`, `--notify-target`)
 - Automated `unittest` coverage currently passing for the implemented modules
 
 ## Status
-- Latest pushed commit: `feat: add diagnosis flow and target validation`
+- Latest pushed commit before this change: `feat: add diagnosis flow and target validation`
 - Repo: `<https://github.com/chauhan081/ai-site-caretaker>`
-- Current local focus: README synced with the latest reporting/output behavior
+- Current local focus: notification-friendly delivery output for CLI/scheduler use

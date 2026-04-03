@@ -4,9 +4,25 @@
       "name": "example-site",
       "url": "https://example.com",
       "host": "example.com",
-      "checks": ["site", "ssl", "server"],
+      "checks": ["site", "ssl", "server", "logs"],
       "server_ports": [80, 443],
       "log_paths": ["/var/log/nginx/error.log"],
+      "notification_targets": [
+        {
+          "name": "ops-email",
+          "type": "email",
+          "destination": "ops@example.com",
+          "min_severity": "high",
+          "enabled": true
+        },
+        {
+          "name": "slack-webhook",
+          "type": "webhook",
+          "destination": "https://hooks.slack.com/services/replace/me",
+          "min_severity": "medium",
+          "enabled": true
+        }
+      ],
       "notes": "Sample monitoring target"
     }
   ]

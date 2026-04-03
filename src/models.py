@@ -5,6 +5,15 @@ from typing import Any
 
 
 @dataclass
+class NotificationTarget:
+    name: str
+    type: str
+    destination: str
+    min_severity: str | None = None
+    enabled: bool = True
+
+
+@dataclass
 class CheckResult:
     name: str
     ok: bool
@@ -21,6 +30,7 @@ class TargetConfig:
     checks: list[str] = field(default_factory=list)
     server_ports: list[int] = field(default_factory=list)
     log_paths: list[str] = field(default_factory=list)
+    notification_targets: list[NotificationTarget] = field(default_factory=list)
 
 
 @dataclass
