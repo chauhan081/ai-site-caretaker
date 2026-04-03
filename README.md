@@ -18,6 +18,20 @@ CLI-first AI website/server caretaker for small businesses and agencies.
 - `scripts/` helper scripts
 - `tests/` automated tests
 
+## Install / run
+For local development:
+
+```text
+python -m src.main about
+```
+
+For an installable CLI:
+
+```text
+pip install -e .
+ai-site-caretaker about
+```
+
 ## Current commands
 - `python -m src.main about`
 - `python -m src.main check-site https://example.com`
@@ -28,6 +42,7 @@ CLI-first AI website/server caretaker for small businesses and agencies.
 - `python -m src.main daily-report example-site --json`
 - `python -m src.main diagnose-target example-site`
 - `python -m src.main diagnose-target example-site --json`
+- `ai-site-caretaker about` (after `pip install -e .`)
 
 ## Config
 Create `config/targets.json` using `config/targets.example.json` as a template:
