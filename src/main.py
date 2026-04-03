@@ -6,6 +6,7 @@ from pathlib import Path
 from .checks import check_server, check_site, check_ssl
 from .config_loader import EXAMPLE_CONFIG_PATH, load_targets
 from .diagnostics import build_diagnosis
+from .exporting import export_text
 from .logs import read_logs
 from .output import render_diagnosis, render_result, serialize_diagnosis
 from .report_format import render_report_summary, serialize_report_summary
@@ -43,10 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser = subparsers.add_parser('daily-report', help='Run checks for a configured target')
     report_parser.add_argument('target_name')
     report_parser.add_argument('--json', action='store_true')
+    report_parser.add_argument('--output', help='Write the rendered report to a .txt or .json file')
 
     diagnose_parser = subparsers.add_parser('diagnose-target', help='Run checks and produce a diagnosis for a configured target')
     diagnose_parser.add_argument('target_name')
     diagnose_parser.add_argument('--json', action='store_true')
+    diagnose_parser.add_argument('--output', help='Write the rendered diagnosis to a .txt or .json file')
 
     subparsers.add_parser('about', help='Show project info')
     return parser
@@ -67,6 +70,14 @@ def _load_target_or_exit(target_name: str) -> tuple[object | None, int | None]:
             print(f'- {error}')
         return None, 1
     return target, None
+
+
+
+def _emit_output(content: str, output_path: str | None = None) -> None:
+    print(content)
+    if output_path:
+        export_text(content, output_path)
+        print(f'Exported report to {output_path}')
 
 
 
@@ -107,13 +118,13 @@ def main(argv: list[str] | None = None) -> int:
             return exit_code
         results = build_daily_report(target)
         if args.json:
-            print(render_report_summary(results, as_json=True))
+            content = render_report_summary(results, as_json=True)
         else:
-            print(render_report_summary(results))
-            print()
+            blocks = [render_report_summary(results)]
             for result in results:
-                print(render_result(result))
-                print()
+                blocks.append(render_result(result))
+            content = '\n\n'.join(blocks)
+        _emit_output(content, args.output)
         failures = sum(1 for result in results if not result.ok)
         return 0 if failures == 0 else 1
 
@@ -127,14 +138,13 @@ def main(argv: list[str] | None = None) -> int:
             payload = serialize_report_summary(results)
             payload['diagnosis'] = serialize_diagnosis(diagnosis)
             import json
-            print(json.dumps(payload, indent=2))
+            content = json.dumps(payload, indent=2)
         else:
-            print(render_report_summary(results))
-            print()
-            for result in results:
-                print(render_result(result))
-                print()
-            print(render_diagnosis(diagnosis))
+            blocks = [render_report_summary(results)]
+            blocks.extend(render_result(result) for result in results)
+            blocks.append(render_diagnosis(diagnosis))
+            content = '\n\n'.join(blocks)
+        _emit_output(content, args.output)
         return 0 if diagnosis.healthy else 1
 
     parser.error(f'Unknown command: {args.command}')

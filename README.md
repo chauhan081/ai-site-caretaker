@@ -40,8 +40,10 @@ ai-site-caretaker about
 - `python -m src.main read-logs path/to/app.log --lines 50`
 - `python -m src.main daily-report example-site`
 - `python -m src.main daily-report example-site --json`
+- `python -m src.main daily-report example-site --json --output reports/example-site.json`
 - `python -m src.main diagnose-target example-site`
 - `python -m src.main diagnose-target example-site --json`
+- `python -m src.main diagnose-target example-site --output reports/example-site-diagnosis.txt`
 - `ai-site-caretaker about` (after `pip install -e .`)
 
 ## Config
@@ -84,6 +86,16 @@ Overall severity: INFO
 - [OK] check-ssl | severity=info | SSL valid for 89 day(s) on example.com
 - [OK] check-server | severity=info | TCP connection to example.com:80 succeeded
 ```
+
+### Exporting reports
+Both aggregate commands can write their rendered output to disk:
+
+```text
+python -m src.main daily-report example-site --json --output reports/example-site.json
+python -m src.main diagnose-target example-site --output reports/example-site-diagnosis.txt
+```
+
+Supported export formats are `.json` and `.txt`. Parent folders are created automatically.
 
 ### JSON diagnosis
 ```text
