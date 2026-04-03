@@ -6,7 +6,7 @@ CLI-first AI website/server caretaker for small businesses and agencies.
 - Website health checks
 - SSL expiry checks
 - Server/process diagnostics
-- Log reading and issue summaries
+- Log reading with severity-aware summaries and recurring-pattern grouping
 - Target config management
 - Daily report generation
 - Safe execution guardrails
@@ -38,6 +38,7 @@ ai-site-caretaker about
 - `python -m src.main check-ssl example.com`
 - `python -m src.main check-server example.com --port 80`
 - `python -m src.main read-logs path/to/app.log --lines 50`
+  - surfaces error/warning counts, recurring patterns, and sample matching lines
 - `python -m src.main daily-report example-site`
 - `python -m src.main daily-report example-site --json`
 - `python -m src.main daily-report example-site --alerts-only`

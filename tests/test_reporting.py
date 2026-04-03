@@ -26,6 +26,8 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(results[0].name, 'check-server:65534')
         self.assertEqual(results[1].name, 'check-server:65533')
         self.assertTrue(results[2].name.startswith('read-logs:'))
+        self.assertFalse(results[2].ok)
+        self.assertEqual(results[2].details['error_like_lines'], 1)
 
 
 if __name__ == '__main__':
